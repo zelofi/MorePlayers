@@ -6,13 +6,17 @@
     using HarmonyLib;
     using Photon.Pun;
     using Photon.Realtime;
+    using Steamworks.Data;
+    using Steamworks;
+    using UnityEngine;
+    using System.Threading.Tasks;
 
     [BepInPlugin(modGUID, modName, modVersion)]
     public class Plugin : BaseUnityPlugin
     {
         public const string modGUID = "zelofi.MorePlayers";
         public const string modName = "MorePlayers";
-        public const string modVersion = "1.0.0";
+        public const string modVersion = "1.0.1";
 
         private readonly Harmony harmony = new Harmony(modGUID);
 
@@ -29,7 +33,7 @@
             (
                 "General", 
                 "MaxPlayers", 
-                6, 
+                10, 
                 "The max amount of players allowed in a server"
             );
 
@@ -37,7 +41,7 @@
         }
 
         [HarmonyPatch(typeof(NetworkConnect), "TryJoiningRoom")]
-        public class NetworkConnectPatch
+        public class TryJoiningRoomPatch
         {
             static bool Prefix(ref string ___RoomName)
             {
@@ -67,6 +71,27 @@
                     mls.LogError("NetworkConnect instance is null, using previous method!");
                     return true;
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(SteamManager), "HostLobby")]
+        public class HostLobbyPatch
+        {
+            static async Task<bool> PrefixAsync()
+            {
+                Debug.Log("Steam: Hosting lobby...");
+                Lobby? lobby = await SteamMatchmaking.CreateLobbyAsync(configMaxPlayers.Value);
+
+                if (!lobby.HasValue)
+                {
+                    Debug.LogError("Lobby created but not correctly instantiated.");
+                    return false;
+                }
+
+                lobby.Value.SetPublic();
+                lobby.Value.SetJoinable(b: false);
+
+                return false;
             }
         }
     }
