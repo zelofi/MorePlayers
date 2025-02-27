@@ -37,7 +37,8 @@
                 "The max amount of players allowed in a server"
             );
 
-            harmony.PatchAll();
+            harmony.PatchAll(typeof(TryJoiningRoomPatch));
+            harmony.PatchAll(typeof(HostLobbyPatch));
         }
 
         [HarmonyPatch(typeof(NetworkConnect), "TryJoiningRoom")]
@@ -77,7 +78,13 @@
         [HarmonyPatch(typeof(SteamManager), "HostLobby")]
         public class HostLobbyPatch
         {
-            static async Task<bool> PrefixAsync()
+            static bool Prefix()
+            {
+                HostLobbyAsync();
+                return false;
+            }
+
+            static async void HostLobbyAsync()
             {
                 Debug.Log("Steam: Hosting lobby...");
                 Lobby? lobby = await SteamMatchmaking.CreateLobbyAsync(configMaxPlayers.Value);
@@ -85,13 +92,11 @@
                 if (!lobby.HasValue)
                 {
                     Debug.LogError("Lobby created but not correctly instantiated.");
-                    return false;
+                    return;
                 }
 
                 lobby.Value.SetPublic();
                 lobby.Value.SetJoinable(b: false);
-
-                return false;
             }
         }
     }
