@@ -1,4 +1,4 @@
-﻿namespace MorePlayers
+namespace MorePlayers
 {
     using BepInEx;
     using BepInEx.Configuration;
@@ -8,95 +8,86 @@
     using Photon.Realtime;
     using Steamworks.Data;
     using Steamworks;
-    using UnityEngine;
-    using System.Threading.Tasks;
 
     [BepInPlugin(modGUID, modName, modVersion)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string modGUID = "zelofi.MorePlayers";
-        public const string modName = "MorePlayers";
-        public const string modVersion = "1.0.1";
+        private const string modGUID = "zelofi.MorePlayers";
+        private const string modName = "MorePlayers";
+        private const string modVersion = "1.0.1";
+        
+        private static readonly Harmony harmony = new Harmony(modGUID);
+        
+        internal static ConfigEntry<int> configMaxPlayers;
 
-        private readonly Harmony harmony = new Harmony(modGUID);
-
-        public static ConfigEntry<int> configMaxPlayers;
-
-        public static ManualLogSource mls;
-
-        void Awake()
+        internal static ManualLogSource mls;
+        
+        private void Awake()
         {
-            mls = BepInEx.Logging.Logger.CreateLogSource(modGUID);
-            mls.LogInfo($"{modGUID} is now awake!");
+            mls = Logger;
+            
+            configMaxPlayers = Config.Bind("General", "MaxPlayers", 10, new ConfigDescription("The max amount of players allowed in a server", new AcceptableValueRange<int>(1, 100)));
 
-            configMaxPlayers = Config.Bind
-            (
-                "General", 
-                "MaxPlayers", 
-                10, 
-                "The max amount of players allowed in a server"
-            );
+            harmony.PatchAll(typeof(Patches_Photon));
+            harmony.PatchAll(typeof(Patches_Steam));
 
-            harmony.PatchAll(typeof(TryJoiningRoomPatch));
-            harmony.PatchAll(typeof(HostLobbyPatch));
+            mls.LogInfo("Patches Loaded");
         }
+    }
 
-        [HarmonyPatch(typeof(NetworkConnect), "TryJoiningRoom")]
-        public class TryJoiningRoomPatch
+    [HarmonyPatch]
+    internal static class Patches_Photon
+    {
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpCreateRoom")]
+        [HarmonyPrefix]
+        private static void CreateRoom_Prefix(ref EnterRoomParams enterRoomParams)
         {
-            static bool Prefix(ref string ___RoomName)
+            if (enterRoomParams.RoomOptions?.MaxPlayers == 6)
             {
-                if(string.IsNullOrEmpty(___RoomName))
-                {
-                    mls.LogError("RoomName is null or empty, using previous method!");
-                    return true;
-                }
-                
-                if(configMaxPlayers.Value == 0)
-                {
-                    mls.LogError("The MaxPlayers config is null or empty, using previous method!");
-                    return true;
-                }
-
-                if(NetworkConnect.instance != null)
-                {
-                    PhotonNetwork.JoinOrCreateRoom(___RoomName, new RoomOptions
-                    {
-                        MaxPlayers = configMaxPlayers.Value
-                    }, TypedLobby.Default, null);
-
-                    return false;
-                }
-                else
-                {
-                    mls.LogError("NetworkConnect instance is null, using previous method!");
-                    return true;
-                }
+                enterRoomParams.RoomOptions.MaxPlayers = Plugin.configMaxPlayers.Value;
+                Plugin.mls.LogInfo("Changed MaxPlayers for PhotonNetwork.CreateRoom");
             }
         }
-
-        [HarmonyPatch(typeof(SteamManager), "HostLobby")]
-        public class HostLobbyPatch
+        
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinRandomOrCreateRoom")]
+        [HarmonyPrefix]
+        private static void JoinRandomOrCreateRoom_Prefix(ref OpJoinRandomRoomParams opJoinRandomRoomParams, ref EnterRoomParams createRoomParams)
         {
-            static bool Prefix()
+            // if (opJoinRandomRoomParams.ExpectedMaxPlayers == 6)
+            // {
+            //     opJoinRandomRoomParams.ExpectedMaxPlayers = (byte)Plugin.configMaxPlayers.Value;
+            // }
+            
+            if (createRoomParams.RoomOptions?.MaxPlayers == 6)
             {
-                HostLobbyAsync();
-                return false;
+                createRoomParams.RoomOptions.MaxPlayers = Plugin.configMaxPlayers.Value;
+                Plugin.mls.LogInfo("Changed MaxPlayers for PhotonNetwork.JoinRandomOrCreateRoom");
             }
-
-            static async void HostLobbyAsync()
+        }
+        
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinOrCreateRoom")]
+        [HarmonyPrefix]
+        private static void JoinOrCreateRoom_Prefix(ref EnterRoomParams enterRoomParams)
+        {
+            if (enterRoomParams.RoomOptions?.MaxPlayers == 6)
             {
-                Debug.Log("Steam: Hosting lobby...");
-                Lobby? lobby = await SteamMatchmaking.CreateLobbyAsync(configMaxPlayers.Value);
+                enterRoomParams.RoomOptions.MaxPlayers = Plugin.configMaxPlayers.Value;
+                Plugin.mls.LogInfo("Changed MaxPlayers for PhotonNetwork.JoinOrCreateRoom");
+            }
+        }
+    }
 
-                if (!lobby.HasValue)
-                {
-                    Debug.LogError("Lobby created but not correctly instantiated.");
-                    return;
-                }
-
-                lobby.Value.SetPublic();
-                lobby.Value.SetJoinable(b: false);
+    [HarmonyPatch]
+    internal static class Patches_Steam
+    {
+        [HarmonyPatch(typeof(SteamManager), "OnLobbyCreated")]
+        [HarmonyPrefix]
+        private static void OnLobbyCreated_Prefix(Result _result, ref Lobby _lobby)
+        {
+            if (_result == Result.OK && _lobby.MaxMembers == 6)
+            {
+                _lobby.MaxMembers = Plugin.configMaxPlayers.Value;
+                Plugin.mls.LogInfo("Changed MaxPlayers for SteamManager.OnLobbyCreated");
             }
         }
     }
