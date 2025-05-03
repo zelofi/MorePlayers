@@ -38,7 +38,7 @@ namespace MorePlayers
     [HarmonyPatch]
     internal static class Patches_Photon
     {
-        [HarmonyPatch(typeof(LoadBalancingClient), "OpCreateRoom")]
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpCreateRoom")] // Host a public lobby (button in the server list)
         [HarmonyPrefix]
         private static void CreateRoom_Prefix(ref EnterRoomParams enterRoomParams)
         {
@@ -49,7 +49,7 @@ namespace MorePlayers
             }
         }
         
-        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinRandomOrCreateRoom")]
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinRandomOrCreateRoom")] // Host a public lobby (random matchmaking)
         [HarmonyPrefix]
         private static void JoinRandomOrCreateRoom_Prefix(ref OpJoinRandomRoomParams opJoinRandomRoomParams, ref EnterRoomParams createRoomParams)
         {
@@ -65,7 +65,7 @@ namespace MorePlayers
             }
         }
         
-        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinOrCreateRoom")]
+        [HarmonyPatch(typeof(LoadBalancingClient), "OpJoinOrCreateRoom")] // Host a private lobby
         [HarmonyPrefix]
         private static void JoinOrCreateRoom_Prefix(ref EnterRoomParams enterRoomParams)
         {
@@ -80,7 +80,7 @@ namespace MorePlayers
     [HarmonyPatch]
     internal static class Patches_Steam
     {
-        [HarmonyPatch(typeof(SteamManager), "OnLobbyCreated")]
+        [HarmonyPatch(typeof(SteamManager), "OnLobbyCreated")] // Created a steam lobby
         [HarmonyPrefix]
         private static void OnLobbyCreated_Prefix(Result _result, ref Lobby _lobby)
         {
